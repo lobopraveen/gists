@@ -1,5 +1,5 @@
 Subtract 12 hours from the date taken time
 
-```script
+```bash
 exiftool -overwrite_original -AllDates-=12 *jpg
 ```

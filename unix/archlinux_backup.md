@@ -1,6 +1,6 @@
 This script backs-up home directory partially and reminds me of rest.
 
-```script
+```bash
 #!/bin/sh
 #backup all of it.
 #if using exclude={,} format make sure that there is more than one entry in the {} block

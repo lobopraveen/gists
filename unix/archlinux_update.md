@@ -1,6 +1,6 @@
 This script updates Arch Linux system
 
-```script
+```bash
 echo "Running system update..."
 
 printf  "\n\npacker -Syuu\n\n"
