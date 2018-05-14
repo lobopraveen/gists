@@ -6,8 +6,8 @@ Everything in this repo that I authored uses the same license as this repo itsel
 
 
 ### Unix
-- [archlinux_backup](unix/archlinux_backup)
-- archlinux_update
-- exiftool_common_commands
-- filename_extension_manipulation
-- filename_rename_batch
+- [archlinux_backup](unix/archlinux_backup.md)
+- [archlinux_update](unix/archlinux_update.md)
+- [exiftool_common_commands](unix/exiftool_common_commands.md)
+- [filename_extension_manipulation](unix/filename_extension_manipulation.md)
+- [filename_rename_batch](unix/filename_rename_batch.md)
