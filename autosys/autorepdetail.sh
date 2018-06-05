@@ -31,7 +31,10 @@ if [ $# -ne 1 ]; then
   exit 101
 fi
 
-echo "You may need to set the Autosys environment definitions here."
+if [ `which autorep | cut -d " " -f1` = "no" ]; then
+  echo "ERROR: autorep command not found."
+  exit 102
+fi
 
 app=$1
 echo "Search_String - ${app}"

@@ -23,7 +23,7 @@
 # SOFTWARE.
 #
 
-echo "Saving the command for future use or script build out."
+echo "Saving the command for future use or future script build out."
 
 autocal_asc << EOF
 calendarname

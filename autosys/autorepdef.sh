@@ -32,8 +32,8 @@ if [ $# -ne 1 ]; then
   exit 101
 fi
 
-if [ `which jil | cut -d " " -f1` = "no" ]; then
-  echo "ERROR: jil command not found."
+if [ `which autorep | cut -d " " -f1` = "no" ]; then
+  echo "ERROR: autorep command not found."
   exit 102
 fi
 
