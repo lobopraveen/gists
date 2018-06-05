@@ -2,7 +2,7 @@
 ### A collection of gists - common utilities
 
 #### License:
-Everything in this repo that I authored uses the same license as this repo itself - MIT. If any item in this repo is not my original work, please refer to the original license. I will try to provide links back to the original source wherver possible. Remind me!
+Everything in this repo that I authored uses the same license as this repo itself - MIT. If any item in this repo is not my original work, please refer to the original license. I will try to provide links back to the original source wherever possible. Remind me!
 
 ### Autosys
 - [autosys/autocal.sh](autosys/autocal.sh) - Not built out yet. Just shows how to use autocal command

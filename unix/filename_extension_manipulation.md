@@ -43,3 +43,5 @@ done
 - `%%` matches longest from the end
 - `#` shortest from the beginning
 - `##` longest from the beginning
+
+See: https://praveenlobo.com/blog/shell-scripts-to-manipulate-the-file-name-extensions/

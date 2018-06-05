@@ -7,12 +7,14 @@ sed 's/\("[^,]\{1,\}\),\([^,^"]\{1,\}"\)/\1\2/g' filename
 Remove the commas from the values in a csv file where the values may have none or two commas.
 
 ```sh
-sed 's/\("[^,]\{1,\}\),\([^,^"]\{1,\}\),\([^,^"]\{1,\}"\)/\1\2\3/g' filename 
+sed 's/\("[^,]\{1,\}\),\([^,^"]\{1,\}\),\([^,^"]\{1,\}"\)/\1\2\3/g' filename
 ```
 
-Remove the commas from the values in a csv file where the values may have up to two commas. Combine the two from above. 
+Remove the commas from the values in a csv file where the values may have up to two commas. Combine the two from above.
 
 ```sh
 sed -e 's/\("[^,]\{1,\}\),\([^,^"]\{1,\}"\)/\1\2/g' \
     -e 's/\("[^,]\{1,\}\),\([^,^"]\{1,\}\),\([^,^"]\{1,\}"\)/\1\2\3/g' filename
 ```
+
+See: https://praveenlobo.com/blog/remove-commas-from-values-in-csv-file/
