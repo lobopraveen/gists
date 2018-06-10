@@ -1,12 +1,12 @@
 ## Power Query to build IN clause from a list of values
 
-Builds a comma separated list of values from a table in the spreadsheet. 
+Builds a comma separated list of values from a table in the spreadsheet.
 
 |Search Keys|
 |---|
 |Praveen|
 |Preetham|
-|John Deo|
+|John Doe|
 
 to
 
