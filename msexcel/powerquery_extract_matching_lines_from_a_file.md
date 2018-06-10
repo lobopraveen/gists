@@ -1,6 +1,8 @@
+## Power Query to extract matching lines from a file based on a list of values
 
+Uses the values from a named range "SearchKeys" and brings in lines that match any value in the range. 
 
-```csharp
+```m
 let
     KeySource = Excel.CurrentWorkbook(){[Name="SearchKeys"]}[Content],
     KeysWithoutNull = Table.SelectRows(KeySource, each [Keys] <> null),

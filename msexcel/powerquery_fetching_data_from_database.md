@@ -1,6 +1,8 @@
+## Power Query to run a query against a database
 
+The last line shows how to connect and run a query. Rest of the lines demonstrate building of IN clause for a query from values in "SearchKeys" named range. 
 
-```csharp
+```m
 let
     KeySource = Excel.CurrentWorkbook(){[Name="SearchKeys"]}[Content],
     KeysWithoutNull = Table.SelectRows(KeySource, each [Keys] <> null),
