@@ -1,0 +1,116 @@
+<!--
+ MIT License
+
+ Copyright (c) 2018 Praveen Lobo (praveenlobo.com)
+
+ Part of the code for the autocomplete was taken from stackoverflow.com
+
+ Permission is hereby granted, free of charge, to any person obtaining a copy
+ of this software and associated documentation files (the "Software"), to deal
+ in the Software without restriction, including without limitation the rights
+ to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ copies of the Software, and to permit persons to whom the Software is
+ furnished to do so, subject to the following conditions:
+
+ The above copyright notice and this permission notice shall be included in all
+ copies or substantial portions of the Software.
+
+ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ SOFTWARE.
+-->
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Bookmark Search by Praveen Lobo</title>
+    <meta name="description" content="Bookmark Search using jquery.">
+    <meta name="keywords" content="bookmark,search">
+    <meta name="author" content="Praveen Lobo (lobopraveen@gmail.com) and StackOverflow contributors">
+    <meta name="license" content="MIT License">
+    <meta http-equiv="Content-Type" content="text/html;charset=utf-8">
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/base/jquery-ui.css">
+    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+
+<script type="text/javascript">
+
+  $(document).ready(function() {
+    // Add new keywords and links here. File system and LAN links should escape "\" with an "\"
+    var bookmarkList = [
+          { value: "LAN Test App1",        url: "\\\\some\\lan\\location"},
+          { value: "LAN Stage App1",       url: "\\\\some\\lan\\location"},
+          { value: "LAN Prod App1",        url: "\\\\some\\lan\\location"},
+          { value: "StackOverflow",        url: "https://stackoverflow.com"},
+          { value: "Bing Search",          url: "https://bing.com"},
+          { value: "GitHub Lobo",          url: "https://github.com/lobopraveen"},
+          { value: "GitHub Repo gists",    url: "https://github.com/lobopraveen/gists"},
+          { value: "CI CD Travis",         url: "https://travis-ci.org/"},
+          { value: "CI CD Travis Lobo",    url: "https://travis-ci.org/lobopraveen"},
+          { value: "CI CD Jenkins",        url: "https://jenkins.io/"},
+          { value: "Facebook",             url: "https://facebook.com"},
+          { value: "Google News",          url: "https://news.google.com"},
+          { value: "Google Search",        url: "https://google.com/"}
+    ];
+
+    $("#autocomplete").autocomplete({
+        source: function (request, response) {
+            var responseArray = [];
+            var requestWords = request.term.split(" ");
+            // loop through each bookmark in the array
+            for (i = 0; i < bookmarkList.length; i++) {
+              // loop through each word typed
+              for (j = 0; j < requestWords.length; j++) {
+                // check the word typed against the bookmark
+                regexp = new RegExp(requestWords[j], 'ig');
+                if (!bookmarkList[i].value.match(regexp)) {
+                  // no match
+                  break;
+                }
+              }
+              // if the counter matches all words typed, save the bookmark
+              if (j == requestWords.length) {
+                  responseArray.push({value:bookmarkList[i].value, url:bookmarkList[i].url});
+              }
+            } // end main for loop
+            // send the saved bookmarks as response
+            response(responseArray);
+        },
+        select: function (event, ui) {window.location = ui.item.url;} // go to selected bookmark
+
+    }).data('ui-autocomplete')._renderItem = function (ul, item) {
+      // build regex from each word typed
+      var searchTerm = $.trim(this.term).split(/\s+/).join('|');
+      var newLabel = item.label;
+      regexp = new RegExp('(' + searchTerm + ')', "ig");
+      // change text style for each matching term by sorrounding matching word/letters with span
+      newLabel = newLabel.replace(regexp, "<span style='font-weight:bold;color:blue;'>$1</span>");
+      // add the newly created label to the autocomplete for rendering
+      return $("<li></li>")
+          .data("item.autocomplete", item)
+          .append("<div>" + newLabel + "</div>")
+          .appendTo(ul);
+    };
+
+    // center the input box and set cursor
+    $("#autocomplete").width(275).position({of: $(window)}).select();
+    // putting the signature in place and adding hyperlink
+    $("#signature").css({"position":"fixed", "bottom":"10px", "right":"20px", "cursor":"pointer"})
+                   .click(function(){window.location = "https://praveenlobo.com"});
+
+});
+</script>
+
+</head>
+<body>
+
+  <input type="text" id="autocomplete" value="Enter keywords here...">
+
+  <div id="signature">Bookmark Search by <i>Praveen Lobo</i></div>
+
+</body>
+</html>
