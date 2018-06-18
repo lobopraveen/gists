@@ -9,6 +9,9 @@ Everything in this repo that I authored uses the same license as this repo itsel
 - [autorepdef.sh](autosys/autorepdef.sh) - script to export the job definitions for the jobs listed in the given file
 - [autorepdetail.sh](autosys/autorepdetail.sh) - script to extract details of all jobs that start with a given pattern
 
+### JavaScript
+- [bookmark_search.html](javascript/bookmark_search.html) - static HTML page bookmark search tool using JavaScript 
+
 ### Markit EDM
 - [matcher_hands_on](markitedm/matcher_hands_on.md) - notes from my hands-on with Markit EDM's classic matcher
 - [source_monitor_reset](markitedm/source_monitor_reset.md) - how to reset the source monitoring's last processed time-stamp
