@@ -10,7 +10,7 @@ Everything in this repo that I authored uses the same license as this repo itsel
 - [autorepdetail.sh](autosys/autorepdetail.sh) - script to extract details of all jobs that start with a given pattern
 
 ### JavaScript
-- [bookmark_search.html](javascript/bookmark_search.html) - static HTML page bookmark search tool using JavaScript 
+- [bookmark_search.html](javascript/bookmark_search.html) - static HTML page bookmark search tool using JavaScript. [demo](https://praveenlobo.com/media/51-75/54-bookmark-search/bookmark_search.html) 
 
 ### Markit EDM
 - [matcher_hands_on](markitedm/matcher_hands_on.md) - notes from my hands-on with Markit EDM's classic matcher
