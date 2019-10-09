@@ -1,6 +1,8 @@
 ## gists
 ### A collection of gists - common utilities
 
+I may have blogged additional details about some of these gists which you find on my [website](https://praveenlobo.com/blog/). There is a [basic search](https://praveenlobo.com/search/) functionality available on the site; you may also use [Google's site search](https://www.google.com/search?q=site%3Ahttps%3A%2F%2Fpraveenlobo.com)
+
 #### License:
 Everything in this repo that I authored uses the same license as this repo itself - MIT. If any item in this repo is not my original work, please refer to the original license. I will try to provide links back to the original source wherever possible. Remind me!
 
