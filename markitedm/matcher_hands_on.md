@@ -1,302 +1,578 @@
+[IHS Markit](https://ihsmarkit.com/products/edm.html) defines Enterprise Data Management (EDM) as
 
-TODO: make this readable!
+> EDM is a data management platform for acquiring, validating and distributing trade, operational, risk, financial and customer data. It creates a single version of the truth in a consistent, transparent and fully audited environment. Firms benefit from greater control, ongoing compliance and transparency of their data.
 
--- each matcher gets CADIS.DM_ZXMCHR_INBOX, _KEYS, _SEARCH views. inbox viewsare created for individual sources as well
--- each source gets CAID.DM_ZXMCHR_ZXSOURCE_INFO, INFOALL, _OUT views.
--- CADIS_PROC gets  the main tables - DM_MATCHPOINTx and DM_MP4_SOURCExxx where x is a digit.
---cadis data matcher views store all columns from source even if coluns are unchecked in the rule columns stage
--- added master table as ref input wihtout any rules and no data shows up in cadis dm info, all, out views.
--- cadis dm_code_keys view (match point keys) has cadis id, obsolete, and exists? columdn for each source and changed by.
---          the exists was true even after row deleted from source but false after running matcher.  
--- dm_code_search shows acceptros name in last modified. it removes row in input row is deleted without even running matcher
--- all other places show datamatcher is you accept its proposal. if yuo chcange hten it shows your name
---  each source gets some random number and memd creates cadis_prod schema -> DM_... tables with that number. it gives keys and revisions.
--- revision table where the key is stored evenw when the src rec is deletd when not asked to remove cadis id association.  if it is checked then it deletes
--- from revision table aslo hence new cadis id if it comes back again
+Markit has it's own product for Enterprise Data Management called Markit EDM. I have fairly decent exposure to this tool including passing Markit's core introduction and advanced course. Any MEDM person worth their salt would agree that the Data Matcher is the heart of the MEDM. It is also one of the complicated components that is daunting and gets out of hand easily at which point no one wants to touch it! I had limited experience with the matcher as it was already setup by the time I came on board the project and it was being managed by a few other people. This whole post is about my hands-on with the Data Matcher to gain more experience with the component.
 
---setup
--- 4 sources. 1 master table. not required usually*.  three others. BB BRS PNT
--- Master - ref input, Dups not allowed but appear in inbox, include cadis revision , re-present manual overrides, generate all possible matches
--- BB normal input, dups not allowed but appear in inbox, def will not show in inxbox, pass to matcher if subsequent run results in diff match, include cadis revision , re-present manual overrides, generate all possible matches
--- BRS normal input, dups not allowed but appear in inbox, def will how in inxbox, pass to matcher if subsequent run results in diff match, include cadis revision , re-present manual overrides, generate all possible matches
--- PNT normal input, dups allowed, pass to matcher if subsequent run results in diff match, include cadis revision , if a record is no longer present, reomve assocaite with assigned cadis id.
--- uncheck everything not needed in match rules in the rul ecolumns
+Please note that the entire thing below was carelessly jotted down which I cleaned up after a year or so. You might find a lot of case mismatches, abbreviations, and even some random sentences where it really didn't make any sense to me. I'm not trying to make it 100% accurate but just documenting it as is so that if I ever get a hold of an MEDM instance I can follow along. If you are currently working in MEDM, this might make a whole lot of sense to you!
 
--- bbgid, brscusip, pointid are keys for tohse those tables
--- master has cadis and keys for each source
+Warning: Markit introduced a replacement for the Data Matcher called the Core Matcher in their 11.x release. It is much faster, less cumbersome, and easier to manage. This page is not about the Core Matcher; yuo probably don't even want to read this junk!
 
---rules
--- mater has no rules
--- BB - bbgid on master at 100%
--- BRS threshold 75 - brscusip on master at 100%, BRScusipt o bb cusip + isins at 90, just isin on bb at 80, rule type insert 76% if country is russia, rule type dedup on brscusip
--- Point threshold 70 - pointdi on master at 100%, cusip + isin on bb at 70%, just cusip or isin match on bb at 65
+### Abbreviations
+
+- ZX - is a prefix I used just so I can sort the objects easil towards the bottom in the list.
+- ZXMCHR - Code for Matcher - MCHR with ZX prefix
+- BB - Bloomberg
+- PNT - Point
+- BRS - BlackRock
+
+### Observations
+
+I listed down the observations shown below as I was going through the setup and different scenarios as described in the post below starting from the Setup. If it doesn't make sense now, come back after going though the whole thing.
+
+- Each matcher gets `CADIS.DM_ZXMCHR_INBOX`, `CADIS.DM_ZXMCHR_KEYS`, `CADIS.DM_ZXMCHR_SEARCH` views. Inbox views are created for individual sources as well.
+
+- Each source gets `CADIS.DM_ZXMCHR_ZXSOURCE_INFO`, `CADIS.DM_ZXMCHR_ZXSOURCE_INFOALL`, `CADIS.DM_ZXMCHR_ZXSOURCE_OUT` views.
+- `CADIS_PROC` gets the main tables - `DM_MATCHPOINTx` and `DM_MP4_SOURCExxx` where x is a digit.
+- CADIS data matcher views store all columns from the source even if the columns are unchecked in the rule columns stage
+- Added master table as reference input without any rules and no data shows up in the CADIS DM INFO, INFOALL, OUT views.
+- CADIS DM_*CODE*\_KEYS view (match point keys) has the CADIS ID, obsolete, and exists? column for each source and changed by.
+- The exists column was true even after the row was deleted from the source but false after running the matcher.  
+- DM_*CODE*\_SEARCH shows acceptor's name in the last modified column! It removes the row if the input row is deleted without even running the matcher.
+- All other places show data matcher if you accept its proposal. If you change the proposal then it shows your name.
+- Each source gets some random number and MEDM creates CADIS_PROD schema > DM_... tables with that number. It gives keys and revisions.
+- Revision table is where the key is stored even when the source record is deleted when not asked (unchecked) to remove CADIS ID association. If it is checked then it deletes it from revision table also hence a new CADIS ID if it comes back again.
+
+### Setup for hands on
+- 4 sources. 1 master table.
+- Master is not required as input source usually. Three others sources are BB, BRS, and PNT.
+- Master table - `zxMasterSMF (AssetID, bbgid, cusip, BRScusip, pointid, isin, country, currency)`
+ - master table has CADIS ID called AssetID and keys for each source i.e. bbgid, BRScusip, and pointid.
+ - reference input
+ - dups not allowed but appear in inbox
+ - include CADIS revision
+ - re-present manual overrides
+ - generate all possible matches.
+- BB table - `zxbbsmf (bbgid, cusip, isin, country, currency)`
+ - normal input
+ - dups not allowed but appear in inbox
+ - def will not show in inbox
+ - pass to matcher if subsequent run results in a different match
+ - include CADIS revision , re-present manual overrides, generate all possible matches.
+- BRS table - `zxbrssmf (brscusip, isin, country, currency)`
+ - normal input
+ - dups not allowed but appear in inbox
+ - def will show in inbox
+ - pass to matcher if subsequent run results in diff match
+ - include CADIS revision
+ - re-present manual overrides
+ - generate all possible matches
+- PNT table - `zxPointSMF (Pointid, cusip, isin, country, currency)`
+ - normal input
+ - dups allowed
+ - pass to matcher if subsequent run results in diff match
+ - include CADIS revision
+ - if a record is no longer present
+ - remove associate with assigned CADIS id
+- Uncheck everything not needed in match rules in the rule columns.
 
 
---day 1
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb1', 'cusip1', 'isin1','us', 'usd')
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb2', 'cusip2', 'isin2','us', 'usd')
---default 1000 & 1001 .  0 cnofidence.
--- i wanted it to start at 1001. realign didn't work and it is not straight forward to restart the matcher. I ended up meddling with the cadis
--- tables to reset. then reran to start at 1001
+### Rules
+- master
+ - has no rules
+- BB
+ - bbgid on master at 100%
+- BRS
+ - threshold set to 75
+ - brscusip on master at 100%
+ - BRScusip to bb cusip + isins at 90
+ - just isin on bb at 80
+ - rule type insert 76% if country is russia
+ - rule type dedup on brscusip
+- PNT
+ - threshold set to 70
+ - pointid on master at 100%
+ - cusip + isin on bb at 70%
+ - just cusip or isin match on bb at 65
+
+
+### Day 1
+
+Think of the `INSERT` statements into BB, BRS, and PNT tables as the incoming records from that source that has been validated already.
+
+```sql
+insert into zxbbsmf (bbgid, cusip, isin, country, currency)
+values ('bb1', 'cusip1', 'isin1', 'us', 'usd')
+       ('bb2', 'cusip2', 'isin2', 'us', 'usd')
+````
+
+Default 1000 & 1001.  0 confidence.
+
+I wanted it to start at 1001. Realign didn't work and it is not straight forward to restart the matcher. I ended up meddling with the CADIS tables to reset. Then reran to start at 1001.
+
+Let's say we take matcher output and master the data. The inserts into the master table would look like below. Treat all `INSERT` and `UPDATE` statements into the master table as the result of the matcher output and result of mastering process.
+
+```sql
 insert into zxMasterSMF (AssetID,bbgid,cusip,BRScusip,pointid,isin,country,currency)
-values (1001, 'bb1','cusip1', null,null,'isin1','us', 'usd'),
-       (1002, 'bb2','cusip2', null,null,'isin2','us', 'usd')
+values (1001, 'bb1', 'cusip1', null, null, 'isin1', 'us', 'usd'),
+       (1002, 'bb2', 'cusip2', null, null, 'isin2', 'us', 'usd')
+```
 
-insert into zxbrssmf (brscusip, isin, country, currency) values ('brs1', 'isin1','us', 'usd')
-insert into zxbrssmf (brscusip, isin, country, currency) values ('brs2', 'isin2','us', 'usd')
+Let's say we received BRS inputs on same day.
 
--- match properly. high ocnfidence 80%
+```sql
+insert into zxbrssmf (brscusip, isin, country, currency)
+values ('brs1', 'isin1', 'us', 'usd'),
+       ('brs2', 'isin2', 'us', 'usd')
+```
+
+Matched properly. high confidence 80%.
+
+The result of mastering process would update the BRScusip on the master table.
+
+```sql
 update zxMasterSMF set BRScusip = 'brs1' where AssetID = 1001
 update zxMasterSMF set BRScusip = 'brs2' where AssetID = 1002
+```
 
--- day 2
+### Day 2
+
+```sql
 delete from zxbbsmf where bbgid = 'bb1'
- -- this deleted the row from out and info views but infoall view had the record with null in all columns from
- -- source and cadis_system_ and cadis revision columns turned to null.
- -- match point key still said true for bb exists column!?
+```
+
+This deleted the row from `OUT` and `INFO` views but `INFOALL` view had the record with null in all columns from source and `CADIS_system_` & `CADIS` revision columns turned to null.
+
+Match point key still said true for bb exists column!?
+
+
+```sql
 delete from zxbbsmf where bbgid = 'bb2'
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb2', 'cusip2', 'isin2','canada', 'csd')
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb3', 'cusip3', 'isin3','india', 'inr')
 
-insert into zxbrssmf (brscusip, isin, country, currency) values ('cusip3', 'isin3brs','us', 'usd')   
+insert into zxbbsmf (bbgid, cusip, isin, country, currency)
+values ('bb2', 'cusip2', 'isin2', 'canada', 'csd'),
+       ('bb3', 'cusip3', 'isin3', 'india', 'inr')
 
--- mastering. cadis didnt cahnge
+insert into zxbrssmf (brscusip, isin, country, currency)
+values ('cusip3', 'isin3brs','us', 'usd')   
+```
+
+Mastering didn't change `CADIS`. 1001 gets updated and 1003 gets created as expected.
+
+```sql
 update zxMasterSMF set country = 'canada', currency = 'csd' where AssetID = 1001
 
---new id created as expected
-insert into zxMasterSMF (AssetID,bbgid,cusip,BRScusip,pointid,isin,country,currency)
+insert into zxMasterSMF (AssetID, bbgid, cusip, BRScusip, pointid, isin, country, currency)
 values (1003, 'bb3','cusip3', null,null,'isin3','india', 'inr')
+```
 
--- low confidence. provisional 1. after accepting, only _search view shows my id rest all say matcher
+This gives a low confidence match. provisional 1. After accepting, only the search view shows my id rest all say matcher.
+
+```sql
 update zxMasterSMF set BRScusip = 'cusip3' where AssetID = 1003
---
--- day 3
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb4', 'cusip4', 'isin4','pak', 'pnr')
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb5', 'cusip5', 'isin5','pak', 'pnr')
+```
 
-insert into zxbrssmf (brscusip, isin, country, currency) values ('cusip4', 'isin4','pak', 'usd')
 
---default insertion
-insert into zxMasterSMF (AssetID,bbgid,cusip,BRScusip,pointid,isin,country,currency)
-values (1004, 'bb4','cusip4', null,null,'isin4','pak', 'pnr'),
-       (1005, 'bb5','cusip5', null,null,'isin5','pak', 'pnr')
+### Day 3
 
---hihg confidense. no inbox
+```sql
+insert into zxbbsmf (bbgid, cusip, isin, country, currency)
+values ('bb4', 'cusip4', 'isin4', 'pak', 'pnr'),
+       ('bb5', 'cusip5', 'isin5', 'pak', 'pnr')
+
+insert into zxbrssmf (brscusip, isin, country, currency)
+values ('cusip4', 'isin4','pak', 'usd')
+```
+
+This leads to default insertion.
+
+```sql
+insert into zxMasterSMF (AssetID, bbgid, cusip, BRScusip, pointid, isin, country, currency)
+values (1004, 'bb4','cusip4', null, null, 'isin4', 'pak', 'pnr'),
+       (1005, 'bb5','cusip5', null, null, 'isin5', 'pak', 'pnr')
+```
+
+High confidence match. no inbox.
+
+```sql
 update zxMasterSMF set BRScusip = 'cusip4' where AssetID = 1004
+```
 
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (4, 'cusip4', 'isin4pnt','us', 'usd')
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (5, 'cusip5pnt', 'isin5','us', 'usd')
---both low confidence & in inbox . accept
+```sql
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (4, 'cusip4', 'isin4pnt', 'us', 'usd'),
+       (5, 'cusip5pnt', 'isin5', 'us', 'usd')
+```
+
+Both low confidence & end up in inbox . Accept.
+
+```sql
 update zxMasterSMF set Pointid = 4 where AssetID = 1004
 update zxMasterSMF set Pointid = 5 where AssetID = 1005  
+```
 
+Let's say,
+```sql
 delete from zxPointSMF  where Pointid = 5
--- no change without runing mactaher. INFOALL view turned all nulls , other views didnt show the reocrd.
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (5, 'cusip5pnt', 'isin5','us', 'usd')
---no change without runing mactaher. all views showed data like nothing happend
+```
+
+No change without running matcher. `INFOALL` view turned all nulls, other views didn't show the record.
+
+```sql
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (5, 'cusip5pnt', 'isin5', 'us', 'usd')
+```
+
+No change without running matcher. All views showed data like nothing happened.
+
+```sql
 delete from zxPointSMF  where Pointid = 5
--- run matcher. dleted the row from info all as well. bcz of remove associateion property
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (5, 'cusip4', 'isin4','us', 'usd')
--- results in high confidence match but in ibox bcs os dup. there is already 1004 with same cusip + isin . accept
+```
+
+Run matcher. Deleted the row from `INFOALL` as well because of the remove association property
+
+```sql
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (5, 'cusip4', 'isin4', 'us', 'usd')
+```
+
+Results in high confidence match but in inbox because of duplicate. There is already a 1004 with the same cusip + isin. Accept.
+
+```sql
 update zxMasterSMF set Pointid = 5 where AssetID = 1004
--- then run without any changes on pnt. nothing happens. since point id 5 on master is now pointing to 1004 and 1005,
---  i thought it would say subsequent run diff match but it doesnt.
--- may be because I dont have any rules on the master source
+```
 
+Then run without any changes on pnt. Nothing happens. Since pointid 5 on the master is now pointing to 1004 and 1005, I thought it would say subsequent run different match but it doesn't. May be because I don't have any rules on the master source?!
+
+```sql
 update zxPointSMF set cusip = null where Pointid = 4
--- run matcher on pnt. INFO all table got udpated with null cusip. came up now as subsequent run no match.
--- it is because master source has no rules!
-update zxPointSMF set cusip = 'cusip5' where Pointid = 4  -- just see if it now says diff match
--- yes, it does! other possible matches shows 1005 which is as expected
+```
 
+Run matcher on pnt. `INFOALL` table got updated with null cusip. Came up now as subsequent run no match. It is because master source has no rules!
 
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (50, 'cusip50pnt', 'isin50','us', 'usd')
+```sql
+update zxPointSMF set cusip = 'cusip5' where Pointid = 4
+```
+
+Just to see if it now says different match. Yes, it does! Other possible matches shows 1005 which is as expected.
+
+```sql
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (50, 'cusip50pnt', 'isin50', 'us', 'usd')
+
 update zxMasterSMF set Pointid = 50 where AssetID = 1001
--- i thought 50 would match on master but it doesn.t it seems nothing matches master as there are no rules. it seems to be mathcing
--- only on internal table and not the the real soruce table
--- in inbox. default insertion 1006
+```
 
-insert into zxMasterSMF (AssetID,bbgid,cusip,BRScusip,pointid,isin,country,currency)
-values (1006, null,'cusip50pnt', null,null,'isin50','us', 'usd')
+I thought 50 would match on master but it doesn't! It seems nothing matches master as there are no rules. It seems to be matching only on the internal table and not the the real source table in inbox. Default insertion 1006
 
+```sql
+insert into zxMasterSMF (AssetID, bbgid, cusip, BRScusip, pointid, isin, country, currency)
+values (1006, null, 'cusip50pnt', null, null, 'isin50', 'us', 'usd')
+```
 
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (51, 'cusip50pnt', 'isin50','us', 'usd')
--- in inbox 1007. dont accept
-update zxPointSMF   set cusip = 'cusip4', isin = 'isin4' where Pointid = 51
--- run udpate wihtout acceting anythign in inbox. the item outstanding still says 1007 default insert in inbox
--- run matcher. nothign happens! but other possible matches show 1004. 1007 in KEYS view was marked obsolete.
--- the revision table in cadis_proc schema shows the trail of how cadis id is chanigning. ithas two rows for 51 - 1007 & 1004 in that order
--- accepted to 1004. shows up as Manual user insertion (marked as new) low confidece
--- dm_code_search view says proposed is also 1004 haha! it was 1007 before. after manual it changed ot 1004. doesnt sound right. or may be
--- bcz i ran update and them matcher.
+```sql
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (51, 'cusip50pnt', 'isin50','us', 'usd')
+```
 
--- manual realign point id 4 to 1001 . just because.
--- actually can't do 1001 as it has been deleted fom bb source and we dont have rules on amster source. do 1003
--- realign done. it says manual user match. low confidence
+In inbox 1007. Don't accept it yet.
 
--- run matcher
--- should show up in inbox. doesn't. as the re-present to matcher option is off.
+```sql
+update zxPointSMF set cusip = 'cusip4', isin = 'isin4' where Pointid = 51
+```
 
-update zxPointSMF   set cusip = 'cusip5', isin = 'isin5' where Pointid = 4  
--- now i should see subsequent diff match. BUT it doesnt show up. re-present is off.
+Run update without accepting anything in inbox. The item outstanding still says 1007 default insert in inbox.
 
+Run matcher. Nothing happens! But other possible matches show 1004. 1007 in KEYS view was marked obsolete.
 
---day 4
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (3, 'cusip3', 'isin3','us', 'usd')
--- run matcher. showed up as high confidence dup. becase there is 1003 already.
--- misalgined it to 1002. says manual user insertion marked as newand low confidence
--- ran mathcer now it says subsequencet diff match to 1003. makes sense.
--- manually re aligned stays but realignment from inbox doesn't.
+The revision table in CADIS_proc schema shows the trail of how CADIS id is changing. It has two rows for 51 - 1007 & 1004 in that order.
 
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (10, 'cusip10', 'isin10','us', 'usd')
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (11, 'cusip10', 'isin10','usdup', 'usddup')
--- shows up as 2 new. accepted 10 as 1008. realigned 11 to 1008 instaead of accepting 1009. 1009 got marked as obsolete.
--- ran matcher. said subsequent no match. marked as new and saved. got new cadis 1010. said manual insetion - low confidence
--- ran matcher - subsequnet no match. just accpeted as is. keeps coming up.
--- diff between this and one before is that the one before doenst show up as it says default insertion .
+Accepted to 1004. Shows up as Manual user insertion (marked as new) low confidence
 
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb10', 'cusip10', 'isin10','us', 'usd')
--- this got new cadis is 1011. the master table is not being referenced! ther is no recisprocla rule from bb to pnt. otheriwse
--- this would hae ened up in in box due to multiple matches
--- 1008 and 1010 came up in inbox with subsequent diff match as they both now match to 1011
+`dm_code_search` view says proposed is also 1004 haha! It was 1007 before. After manual it changed to 1004. Doesn't sound right. Or may be because I ran update and then matcher.
+
+Manual realign point id 4 to 1001 just because.
+
+Actually can't do 1001 as it has been deleted from bb source and we don't have rules on master source. Do 1003.
+Realign done. It says manual user match. low confidence.
+
+Run matcher. Should show up in inbox.
+
+Doesn't. As the re-present to matcher option is off.
+
+```sql
+update zxPointSMF set cusip = 'cusip5', isin = 'isin5' where Pointid = 4  
+```
+
+Now I should see subsequent diff match. But it doesn't show up. Re-present is off.
 
 
--- day
-insert into zxbrssmf (brscusip, isin, country, currency) values ('bcusip6', 'isin6brs','us', 'usd')
-insert into zxbrssmf (brscusip, isin, country, currency) values ('bcusip66', 'isin6brs','us', 'usd')
-insert into zxbrssmf (brscusip, isin, country, currency) values ('bcusip7', 'isin7brs','russia', 'rbl')
-insert into zxbrssmf (brscusip, isin, country, currency) values ('bcusip8', 'isin8brs','russia', 'rbl')
-insert into zxbrssmf (brscusip, isin, country, currency) values ('bcusip88', 'isin8brs','russia', 'rbl')
--- insertred last three as 1012, 1013, 1014 because of russia insert rule.
--- first two ended up in inbox with default insertion. 1015 & 1016
---accept all.
+### Day 4
 
--- changed rule type dedupe to check on isin as on brscusip can't be tested. tbl has brscusip as pk so no dup there!
--- 1015 and 1016 came up as subsequent diff match.
--- tried to assign 1016 to 1015 but erros our as source says no dups allowed.
--- 1013 & 1014 didnt show up as dups because russia is at 76 and dedule at 75.
--- accept but they show up in run. dont accept.
--- uncheck re-present to mathcer. accept and then re-run. no change. same thing. keeps showing up.
---
+```sql
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (3, 'cusip3', 'isin3', 'us', 'usd')
+```
+
+Run matcher. Showed up as high confidence dup. Because there is 1003 already.
+
+Misaligned it to 1002. Says manual user insertion marked as new and low confidence.
+
+Ran matcher. Now it says subsequent diff match to 1003. Makes sense.
+
+Manually realigned stays but realignment from inbox doesn't.
+
+```sql
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (10, 'cusip10', 'isin10', 'us', 'usd'),
+       (11, 'cusip10', 'isin10', 'usdup', 'usddup')
+```
+
+Shows up as 2 new. Accepted 10 as 1008. Realigned 11 to 1008 instead of accepting 1009. 1009 got marked as obsolete.
+
+
+Ran matcher. Said subsequent no match. Marked as new and saved. Got new CADIS 1010. Says manual insertion - low confidence
+
+Ran matcher - subsequent no match. Just accepted as is. Keeps coming up.
+
+Diff between this and one before is that the one before doesn't show up as it says default insertion.
+
+```sql
+insert into zxbbsmf (bbgid, cusip, isin, country, currency)
+values ('bb10', 'cusip10', 'isin10', 'us', 'usd')
+```
+
+This got new CADIS as 1011. The master table is not being referenced! There is no reciprocal rule from bb to pnt. Otherwise this would have ended up in the inbox due to multiple matches.
+
+1008 and 1010 came up in inbox with subsequent diff match as they both now match to 1011
+
+
+### Day next
+
+```sql
+insert into zxbrssmf (brscusip, isin, country, currency)
+values ('bcusip6', 'isin6brs', 'us', 'usd'),
+       ('bcusip66', 'isin6brs', 'us', 'usd'),
+       ('bcusip7', 'isin7brs', 'russia', 'rbl'),
+       ('bcusip8', 'isin8brs', 'russia', 'rbl'),
+       ('bcusip88', 'isin8brs', 'russia', 'rbl')
+```
+
+Inserted last three as 1012, 1013, and 1014 because of russia insert rule. First two ended up in inbox with default insertion. 1015 & 1016 accept all.
+
+Changed rule type dedupe to check on isin as on brscusip can't be tested. Table has brscusip as pk so no dup there!
+
+1015 and 1016 came up as subsequent diff match. Tried to assign 1016 to 1015 but errors out as source says no dups allowed.
+
+1013 & 1014 didn't show up as dups because russia is at 76 and dedupe at 75. Accept but they show up in run. Don't accept. Uncheck re-present to matcher. Accept and then re-run. No change. Same thing. Keeps showing up.
+
+```sql
 update  zxbrssmf set isin = 'isin66brs' where BRScusip = 'bcusip66'
--- run matcher.  no isues now.
-insert into zxbrssmf (brscusip, isin, country, currency) values ('bcusip666', 'isin6brs','us', 'usd')
--- i though it'd say dup not allowed so adding diff id and inbox but NOPE! rule type dedup took precedence and assigned  
--- isin6brs 1015 and no inbox!
---
+```
 
--- moved dedup on isin to 77 so russia is 76 confidence
--- rerun. now 1015 & 1016 dhow up as subsequent diff mathc.
+Run matcher. No issues now.
 
+```sql
+insert into zxbrssmf (brscusip, isin, country, currency)
+values ('bcusip666', 'isin6brs', 'us', 'usd')
+```
+
+I thought it'd say dup not allowed so adding diff id and inbox but NOPE! Rule type dedup took precedence and assigned isin6brs 1015 and no inbox!
+
+Moved dedup on isin to 77 so russia is 76 confidence
+
+Rerun. Now 1015 & 1016 show up as subsequent diff match.
+
+```sql
 delete from zxBBsmf where bbgid = 'bb10'
--- all that matchedon bb10 come up as subseq no mathc. just accept . this repeats
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb10', 'cusip10', 'isin10','us', 'usd')
--- nothign shows un in inbox now.
+```
+
+All that matched on bb10 come up as subsequent no match. Just accept. This repeats.
+
+```sql
+insert into zxbbsmf (bbgid, cusip, isin, country, currency)
+values ('bb10', 'cusip10', 'isin10', 'us', 'usd')
+```
+
+Nothing shows up in inbox now.
+
+```sql
 delete from zxPointSMF where Pointid = 33
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (33, 'cusip33', 'isin33','us', 'usd')
--- now 33 gets new cadis id. old is  obsolete. this is beacuse i ask it to not store once src drops the record
 
--- so if we ar ematching pos then i can have id on id rule type dedup and it will dedup.
--- rule type isnert iwll isnert as long as it is highest confidence. even if you say no dups.
---
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (33, 'cusip33', 'isin33', 'us', 'usd')
+```  
 
--- changded pnt cusip and isin match to be high confidence.
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (44, 'cusip5', 'isin4','us', 'usd')
--- high confidnce multiple match
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb123', 'cusip123', 'isin123','canada', 'csd')
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb124', 'cusip124', 'isin124','india', 'inr')
--- def insert
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (123, 'cusip124', 'isin123','us', 'usd')
--- insert on cusip match. so multiple high confidnce match to diff ids dont show in inbox.
+Now 33 gets new CADIS id. Old is obsolete. This is because I ask it to not store once source drops the record. So if we are matching pos (?) then I can have id on id rule type dedup and it will dedup.
 
+Rule type insert will insert as long as it is highest confidence. Even if you say no dups.
+
+Changed pnt cusip and isin match to be high confidence.
+
+```sql
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (44, 'cusip5', 'isin4', 'us', 'usd')
+```
+
+High confidence multiple match.
+
+```sql
+insert into zxbbsmf (bbgid, cusip, isin, country, currency)
+values ('bb123', 'cusip123', 'isin123', 'canada', 'csd'),
+       ('bb124', 'cusip124', 'isin124', 'india', 'inr')
+```
+
+Def insert.
+
+```sql
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (123, 'cusip124', 'isin123', 'us', 'usd')
+```
+
+Insert on cusip match. So multiple high confidence match to different ids don't show in the inbox.
+
+```sql
 delete from zxBBsmf where cusip = 'cusip5' or isin ='isin4'
--- run matcher. all that matched with above rows show up subseq no match
+```
 
--- add rules to master - just enable complimentary on bbgid, brsid, pnt id ones.
-insert into zxMasterSMF (AssetID,bbgid,cusip,BRScusip,pointid,isin,country,currency)
+Run matcher. All that matched with above rows show up as subsequent no match.
+
+Add rules to master - just enable complimentary on bbgid, brsid, pnt id ones.
+
+```sql
+insert into zxMasterSMF (AssetID, bbgid, cusip, BRScusip, pointid, isin, country, currency)
 values (1018, 'bb124','cusip124', null,123,'isin124','india', 'inr')
--- then run matcher once. now it shoudl store lal relationships  
--- also point id 5 and 50 comes up as subse diff match . expected.  doing nothing.
+```
+Then run matcher once. Now it should store all relationships. Also, point id 5 and 50 come up as subsequent diff match. Expected. Doing nothing.
+
+```sql
 delete from zxbbsmf where bbgid = 'bb124'
---run matcher
--- nothing changes. even when bb record was dleeted. becaue point id maps
+```
+
+Run matcher. Nothing changes. Even when bb record was deleted. Because point id maps.
+
+```sql
 update zxMasterSMF set pointid = 1230 where bbgid = 'bb124'
--- now it goes provisional. says subsequent no match. accept and comes back again.  
+```
+
+Now it goes provisional. Says subsequent no match. Accept and comes back again.
+
+```sql
 update zxMasterSMF set pointid = 123 where bbgid = 'bb124'
--- now matcher. doesnt show up
+```
+
+Now matcher. Doesn't show up.
+
+```sql
 update zxMasterSMF set pointid = 1230 where bbgid = 'bb124'
--- now it goes provisional. says subsequent no match. dont accept.
+```
+
+Now it goes provisional. Says subsequent no match. Don't accept.
+
+```sql
 update zxMasterSMF set pointid = 123 where bbgid = 'bb124'
--- subsquene No match. so didnt change. just accept and rerun matcher. doesnt show up.  
--- shows 100% match on master on bbgid
+```
+
+Subsequent no match. So didn't change. Just accept and rerun matcher. Doesn't show up.
+Shows 100% match on master on bbgid
 
 
+Find that CADIS updated changed when source monitoring is on.
 
--- find that cadis updated changer when source monitoring is on
+IDG
 
---IDG
+```sql
+insert into "CADIS"."DM_ZXMCHR_ZXBBSMF_IDG" (bbgid) values ('bb224'), /*224*/ ('bb420')
+```
 
-insert into      "CADIS"."DM_ZXMCHR_ZXBBSMF_IDG" (bbgid) values ('bb224'), /*224*/ ('bb420')
+Run matcher. Nothing. Need to run matcher id generator process. After that out and info tables don't get bb420 . Info all does get a line but only CADIS id filled in. Reason says id generator. CADIS proc source000 and revision tables get the records. bb224 gets 1019 & bb420 gets 1020.
 
--- run matcher. nothing. need to run matcher id gen process. after that
--- out and info tables dont get bb420 . info all doe get a line but only cadis id filled in. reason says id gen
--- cadis proc source000 and revision tables get the records.
---bb224 gets 1019 & bb420 gets 1020
+```sql
+insert into zxbbsmf (bbgid, cusip, isin, country, currency)
+values ('bb420', 'cusip420', 'isin420', 'india', 'inr')
+```
 
-insert into zxbbsmf (bbgid, cusip, isin, country, currency) values ('bb420', 'cusip420', 'isin420','india', 'inr')
--- even before running matcher , show up in out and info tables. i think they use inner join
--- run matcher. no  chnage.
+Even before running matcher, show up in out and info tables. I think they use inner join.
 
-insert into cadis.DM_ZXMCHR_ZXBRSSMF_IDG (BRScusip) values ('brs420')
--- new cadis id 1021 frmo id gen
+Run matcher. No change.
+
+```sql
+insert into CADIS.DM_ZXMCHR_ZXBRSSMF_IDG (BRScusip) values ('brs420')
+```
+
+New CADIS id 1021 from id generator.
+
+```sql
 insert into zxMasterSMF(AssetID, bbgid, cusip, BRScusip, pointid, isin, country, currency)
-                  values ('1020', 'bb420', 'cusip420', 'brs420', 420, 'isin420', 'some country', 'some money')
+values ('1020', 'bb420', 'cusip420', 'brs420', 420, 'isin420', 'some country', 'some money')
+```
 
--- run matcher. nothign happens. master view says high confidence bbgid match
+Run matcher. Nothing happens. Master view says high confidence bbgid match.
 
-insert into zxbrssmf (brscusip, isin, country, currency) values ('brs420', 'isin420','india', 'inr')
--- subsquent diff mathc . realign to 1021  to 1020 and 1021 becomes obsolete
---
+```sql
+insert into zxbrssmf (brscusip, isin, country, currency)
+values ('brs420', 'isin420', 'india', 'inr')
+```
 
-delete from cadis.DM_ZXMCHR_ZXBRSSMF_IDG
-insert into cadis.DM_ZXMCHR_ZXBRSSMF_IDG (BRScusip) values ('brs420')
-insert into cadis.DM_ZXMCHR_ZXBRSSMF_IDG (BRScusip) values ('brs430')
+Subsequent diff match. Realign to 1021 to 1020 and 1021 becomes obsolete.
+
+
+```sql
+delete from CADIS.DM_ZXMCHR_ZXBRSSMF_IDG
+insert into CADIS.DM_ZXMCHR_ZXBRSSMF_IDG (BRScusip) values ('brs420')
+insert into CADIS.DM_ZXMCHR_ZXBRSSMF_IDG (BRScusip) values ('brs430')
+
 update zxMasterSMF set BRScusip = 'brs430' where BRScusip = 'brs1' --1020  
+```
 
---run idg. get brs420 as 1020 correct. brs430 gets 1022 instead of 1006 from master source. so, it basically just gets a new one.
---
+Run IDG. Get brs420 as 1020 correct. brs430 gets 1022 instead of 1006 from master source. So, it basically just gets a new one.
 
+```sql
 update zxMasterSMF set BRScusip = 'brs007' where AssetID = 1019
-insert into zxbrssmf (brscusip, isin, country, currency) values ('brs007', 'isin007','india', 'inr')
 
--- run matcher. got 1019 assigned.
--- so idg can be used if absolutely certain that new id is needed.
+insert into zxbrssmf (brscusip, isin, country, currency)
+values ('brs007', 'isin007', 'india', 'inr')
+```
 
--- can change pk of source from sql and then verif y create. no issues. works.  no need ot vc either
+Run matcher. Got 1019 assigned. So IDG can be used if absolutely certain that new id is needed. Can change pk of source from sql and then verify create. No issues.  Works. No need to verify create either.
 
--- retire point. this record only amatches point id
-insert into zxMasterSMF (AssetID,bbgid,cusip,BRScusip,pointid,isin,country,currency)
-values (1011, 'bb10','cusip10x', null,11,'isin10x','us', 'usd')
--- run matcher. doesnt show up anywehre. nothign happens
+Retire point.  This record only matches point id.
+
+```sql
+insert into zxMasterSMF (AssetID, bbgid, cusip, BRScusip, pointid, isin, country, currency)
+values (1011, 'bb10', 'cusip10x', null, 11, 'isin10x', 'us', 'usd')
+```
+
+Run matcher. Doesn't show up anywhere.  Nothing happens.
+
+```sql
 update zxMasterSMF set bbgid = 'bb10' where bbgid = 'bb10x'
--- run matcher . no wshows up. so retired source wont even be referenced.
+```
 
+Run matcher. No shows up. So retired source won't even be referenced.
 
-insert into zxPointSMF (Pointid, cusip, isin, country, currency) values (444, 'cusip444', 'isin444','us', 'usd')
--- run matcher on all input. nothing happens.
+```sql
+insert into zxPointSMF (Pointid, cusip, isin, country, currency)
+values (444, 'cusip444', 'isin444', 'us', 'usd')
+```
 
+Run matcher on all input. Nothing happens.
+
+```sql
 delete from zxBBsmf where cusip = 'cusip124'
+```
 
--- run matche.r point had a record that mathceddon ly on cusip124
--- no change.
+Run matcher. point had a record that matched only on cusip124
 
--- accpeted an inbox item after source retired - warning but then accpeted. re run of matcher didnt bring it upa gain like it used before reitring the matcher.
+No change.
 
-select* from zxPointSMF
+Accepted an inbox item after source retired - warning but then accepted. re-run of matcher didn't bring it up again like it used before retiring the matcher.
+
+```sql
+select * from zxPointSMF
+
 update zxPointSMF set Pointid = 555 where Pointid = 50
--- master has a match only on this . run matecher. nothing!
-update zxMasterSMF set pointid = 555 where pointid = 50
--- run matcher. 50 had mapped to point but now it is 555 but it still doenst look for new match.
+```
 
--- to remove input, all rules that us eit need to be dleetd.. delte.
- -- run mathcer not the 50/555  came up saying subsequent no match
+Master has a match only on this. Run matcher. Nothing!
+
+```sql
+update zxMasterSMF set pointid = 555 where pointid = 50
+```
+
+Run matcher. 50 had mapped to point but now it is 555 but it still doesn't look for new match.
+
+To remove input, all rules that use it need to be deleted. delete.
+Run matcher. Now the 50/555 came up saying subsequent no match
+
+...
