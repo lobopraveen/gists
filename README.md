@@ -12,10 +12,10 @@ Everything in this repo that I authored uses the same license as this repo itsel
 - [autorepdetail.sh](autosys/autorepdetail.sh) - script to extract details of all jobs that start with a given pattern
 
 ### JavaScript
-- [bookmark_search.html](javascript/bookmark_search.html) - static HTML page bookmark search tool using JavaScript. [demo](https://praveenlobo.com/media/51-75/54-bookmark-search/bookmark_search.html) 
+- [bookmark_search.html](javascript/bookmark_search.html) - static HTML page bookmark search tool using JavaScript. [demo](https://praveenlobo.com/media/51-75/54-bookmark-search/bookmark_search.html)
 
 ### Markit EDM
-- [matcher_hands_on](markitedm/matcher_hands_on.md) - notes from my hands-on with Markit EDM's classic matcher
+- [matcher_hands_on](https://praveenlobo.com/blog/markitedm-classic-matcher-hands-on-notes/) - notes from my hands-on with Markit EDM's classic matcher. Moved to blog.
 - [source_monitor_reset](markitedm/source_monitor_reset.md) - how to reset the source monitoring's last processed time-stamp
 
 ### Miscrosoft Excel
