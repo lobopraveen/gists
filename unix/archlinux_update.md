@@ -3,9 +3,9 @@ This script updates Arch Linux system
 ```bash
 echo "Running system update..."
 
-printf  "\n\naurman -Syuu\n\n"
+printf  "\n\nyay -Syuu\n\n"
 sleep 1
-aurman -Syuu
+yay -Syuu
 
 printf "\n\npaccache -r\n\n"
 sleep 1
